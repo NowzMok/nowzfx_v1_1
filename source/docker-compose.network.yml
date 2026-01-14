@@ -1,0 +1,173 @@
+version: '3.8'
+
+# ========================================
+# NOFX 网络部署版本 docker-compose
+# 
+# 特点：
+#   - 支持从源代码构建
+#   - 自动化依赖管理
+#   - 完整的健康检查
+#   - 日志收集和旋转
+#   - 优化的镜像大小
+#
+# 使用：docker-compose -f docker-compose.network.yml up -d
+# ========================================
+
+services:
+  # ========== 后端服务 ==========
+  nofx-backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+      cache_from:
+        - nofx-backend:latest
+    image: nofx-backend:latest
+    container_name: nofx-backend
+    restart: unless-stopped
+    stop_grace_period: 30s
+    
+    # 端口映射
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+      - "6060:6060"  # pprof 调试端口（可选）
+    
+    # 环境变量
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GOMAXPROCS=${GOMAXPROCS:-4}
+      - JWT_SECRET=${JWT_SECRET:-change-me-to-secure-key}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY:-change-me-to-secure-key}
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_PATH=/app/data/data.db
+    
+    # 数据卷
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - /etc/localtime:/etc/localtime:ro
+    
+    # 网络
+    networks:
+      - nofx-network
+    
+    # 健康检查
+    healthcheck:
+      test: 
+        - CMD
+        - wget
+        - --no-verbose
+        - --tries=1
+        - --spider
+        - http://localhost:8080/api/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # 日志
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "10"
+    
+    # 依赖关系
+    depends_on:
+      nofx-db:
+        condition: service_started
+
+  # ========== 前端服务 ==========
+  nofx-frontend:
+    build:
+      context: ./web
+      dockerfile: ../docker/Dockerfile.frontend
+      cache_from:
+        - nofx-frontend:latest
+    image: nofx-frontend:latest
+    container_name: nofx-frontend
+    restart: unless-stopped
+    
+    # 端口映射
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    
+    # 环境变量
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8080}
+      - REACT_APP_TITLE=${REACT_APP_TITLE:-NOFX Trading Platform}
+    
+    # 健康检查
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://localhost:80/
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # 网络
+    networks:
+      - nofx-network
+    
+    # 日志
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "5"
+    
+    # 依赖关系
+    depends_on:
+      nofx-backend:
+        condition: service_healthy
+
+  # ========== 数据库初始化 ==========
+  nofx-db:
+    image: alpine:latest
+    container_name: nofx-db-init
+    
+    # 数据卷
+    volumes:
+      - ./data:/app/data
+    
+    # 网络
+    networks:
+      - nofx-network
+    
+    # 初始化命令
+    command: sh -c "
+      mkdir -p /app/data &&
+      echo 'Database directory initialized' &&
+      exit 0
+    "
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "test", "-d", "/app/data"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# ========== 网络配置 ==========
+networks:
+  nofx-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ========== 数据卷配置 ==========
+volumes:
+  nofx-data:
+    driver: local
+  nofx-logs:
+    driver: local

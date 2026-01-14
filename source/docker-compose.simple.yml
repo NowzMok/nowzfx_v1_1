@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  nofx-backend:
+    image: nofx-backend:latest
+    container_name: nofx-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY:-your-encryption-key-change-me}
+      - RSA_PRIVATE_KEY=${RSA_PRIVATE_KEY:-}
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_PATH=${DB_PATH:-/app/data/data.db}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data:/app/data
+    networks:
+      - nofx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  nofx-frontend:
+    image: nofx-frontend:latest
+    container_name: nofx-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8080}
+    depends_on:
+      - nofx-backend
+    networks:
+      - nofx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  nofx-network:
+    driver: bridge
+
+volumes:
+  nofx-data:
+    driver: local
