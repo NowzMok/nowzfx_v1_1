@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+vendor/
+go.sum.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.o
+*.a
+*.so
+*.exe
+*.dll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# System
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+docker_images/*.tar.gz
+docker_images/*.tar
+
+# Node
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Go
+go.sum.lock
